@@ -58,7 +58,7 @@ export default function App() {
   setResult(null);
 
   try {
-    const response = await fetch('http://localhost:8000/api/match', {
+    const response = await fetch('https://smartmatcher.onrender.com/api/match', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -102,7 +102,7 @@ export default function App() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
         <div>
           <h1 style={{ margin: 0, fontSize: '2rem' }}>Smart CV & Skill Matcher</h1>
-          <p style={{ margin: '0.5rem 0 0', color: '#666' }}>Analyze how well any CV matches a target Job Description using AI</p>
+          <p style={{ margin: '0.5rem 0 0', color: '#666' }}>Analyze how well your CV matches the target Job Description using AI</p>
         </div>
 
         {/* Feature 2: View Sample Result Link/Button */}
@@ -333,4 +333,4 @@ export default function App() {
 
     </div>
   );
-}
+} 
