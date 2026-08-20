@@ -57,8 +57,9 @@ export default function App() {
   setIsLoading(true);
   setResult(null);
 
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
   try {
-    const response = await fetch('https://smartmatcher.onrender.com/api/match', {
+    const response = await fetch(`${API_URL}/api/match`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -174,7 +175,7 @@ export default function App() {
             <div style={{ border: '2px dashed #ccc', borderRadius: '6px', padding: '2rem', textAlign: 'center', backgroundColor: '#fff' }}>
               <input type="file" accept=".pdf,.docx,.txt" onChange={handleCvFileUpload} id="cv-upload" style={{ display: 'none' }} />
               <label htmlFor="cv-upload" style={{ cursor: 'pointer', color: '#0066cc', fontWeight: 'bold' }}>
-                {cvFile ? `📄 ${cvFile.name}` : '📁 Click to upload CV (.pdf, .docx)'}
+                {cvFile ? `📄 ${cvFile.name}` : '(Coming Soon)📁 Click to upload CV (.pdf, .docx)'}
               </label>
             </div>
           )}
@@ -227,7 +228,7 @@ export default function App() {
             <div style={{ border: '2px dashed #ccc', borderRadius: '6px', padding: '2rem', textAlign: 'center', backgroundColor: '#fff' }}>
               <input type="file" accept=".pdf,.docx,.txt" onChange={handleJdFileUpload} id="jd-upload" style={{ display: 'none' }} />
               <label htmlFor="jd-upload" style={{ cursor: 'pointer', color: '#0066cc', fontWeight: 'bold' }}>
-                {jdFile ? `📄 ${jdFile.name}` : '📁 Click to upload JD (.pdf, .docx)'}
+                {jdFile ? `📄 ${jdFile.name}` : '(Coming Soon)📁 Click to upload JD (.pdf, .docx)'}
               </label>
             </div>
           )}
@@ -250,7 +251,7 @@ export default function App() {
             fontWeight: 600
           }}
         >
-          {isLoading ? '🤖 AI is Analyzing Match...' : 'Analyze Matching Score'}
+          {isLoading ? 'Analyzing Match...' : 'Analyze Matching Score'}
         </button>
       </div>
 
@@ -302,9 +303,9 @@ export default function App() {
             <div style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: '#0066cc', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem', fontWeight: 'bold', fontSize: '1.2rem' }}>
               1
             </div>
-            <h4 style={{ margin: '0 0 0.5rem' }}>Upload or Paste</h4>
+            <h4 style={{ margin: '0 0 0.5rem' }}>Paste Text</h4>
             <p style={{ margin: 0, fontSize: '0.9rem', color: '#666' }}>
-              Provide your candidate CV and the target Job Description by uploading files or pasting text.
+              Provide your candidate CV and the target Job Description by pasting text or uploading files.
             </p>
           </div>
 
@@ -324,7 +325,7 @@ export default function App() {
             </div>
             <h4 style={{ margin: '0 0 0.5rem' }}>Apply CV Optimization</h4>
             <p style={{ margin: 0, fontSize: '0.9rem', color: '#666' }}>
-              Select options to optimize your CV points specifically tailored to highlight missing requirements.
+              Optimize your CV points specifically tailored to highlight missing requirements.
             </p>
           </div>
 
