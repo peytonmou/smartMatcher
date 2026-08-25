@@ -19,6 +19,41 @@ const SAMPLE_RESULT: AnalysisResult = {
   tailoredElevatorPitch: "Results-oriented leader with 5+ years of driving complex cross-functional projects to completion. Proven track record in optimizing operational workflows and delivering high-impact team outcomes."
 };
 
+const MAX_FILE_SIZE_MB= 5;
+const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+
+async function extractTextFromFile(file: File): Promise<string> {
+  const name = file.name.toLowerCase();
+
+  if (name.endsWith('.txt')) {
+    return await file.text();
+  }
+
+  if (name.endsWith('.docx')) {
+    const mammoth = await import('mammoth');
+    const arrayBuffer = await file.arrayBuffer();
+    const { value } = await mammoth.extractRawText({ arrayBuffer });
+    return value.trim();
+  }
+
+  if (name.endsWith('.pdf')) {
+    const pdfjsLib: any = await import('pdfjs-dist');
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    let text = '';
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      text += content.items.map((item: any) => item.str).join(' ') + '\n';
+    }
+    return text.trim();
+  }
+
+  throw new Error('Unsupported file type.');
+}
+
 export default function App() {
   // Mode tabs: 'paste' | 'upload'
   const [cvMode, setCvMode] = useState<'paste' | 'upload'>('paste');
@@ -29,23 +64,59 @@ export default function App() {
   const [jdText, setJdText] = useState('');
   const [cvFile, setCvFile] = useState<File | null>(null);
   const [jdFile, setJdFile] = useState<File | null>(null);
+  const [cvFileParsing, setCvFileParsing] = useState(false);
+  const [jdFileParsing, setJdFileParsing] = useState(false);
 
   // App UI states
   const [isLoading, setIsLoading] = useState(false);
-  const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [result, setResult] = useState<AnalysisResult | null>(SAMPLE_RESULT);
+  const [isSample, setIsSample] = useState(true);
 
   // File upload handlers
-  const handleCvFileUpload = (e: ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setCvFile(e.target.files[0]);
-    }
-  };
+  const handleCvFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
 
-  const handleJdFileUpload = (e: ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setJdFile(e.target.files[0]);
-    }
-  };
+  if (file.size > MAX_FILE_SIZE_BYTES) {
+    alert(`File is too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Please upload a file under ${MAX_FILE_SIZE_MB} MB.`);
+    e.target.value = '';   // reset the input so the same oversized file can be re-selected after a fix
+    return;
+  }
+
+  setCvFile(file);
+  setCvFileParsing(true);
+  try {
+    const text = await extractTextFromFile(file);
+    setCvText(text);
+  } catch (err: any) {
+    alert(err.message);
+    setCvFile(null);
+  } finally {
+    setCvFileParsing(false);
+  }
+}; 
+
+  const handleJdFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+
+  if (file.size > MAX_FILE_SIZE_BYTES) {
+  alert(`File is too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Please upload a file under ${MAX_FILE_SIZE_MB} MB.`);
+  e.target.value = '';
+  return;
+}
+  setJdFile(file);
+  setJdFileParsing(true);
+  try {
+    const text = await extractTextFromFile(file);
+    setJdText(text);
+  } catch (err: any) {
+    alert(err.message);
+    setJdFile(null);
+  } finally {
+    setJdFileParsing(false);
+  }
+}; 
 
   // Analyze using gpt-5-mini
   const handleAnalyze = async () => {
@@ -53,6 +124,9 @@ export default function App() {
     alert('Please enter or paste text in both the CV and Job Description fields first!');
     return;
   }
+
+  const previousResult = result;
+  const previousIsSample = isSample; 
 
   setIsLoading(true);
   setResult(null);
@@ -78,49 +152,46 @@ export default function App() {
     const data: AnalysisResult = await response.json();
     console.log('Received Analysis Result:', data);
     setResult(data);
+    setIsSample(false);
   } catch (error: any) {
     console.error('Error matching skills:', error);
     alert(`Failed to analyze: ${error.message}`);
+    setResult(previousResult);
+    setIsSample(previousIsSample);
   } finally {
     setIsLoading(false);
   }
   };
 
-  // View Sample Result button handler
-  const handleViewSample = () => {
-    setResult(SAMPLE_RESULT);
-    window.scrollTo({ top: 400, behavior: 'smooth' });
-  };
 
   // Check if inputs are ready
-  const isCvReady = cvMode === 'paste' ? cvText.trim().length > 0 : cvFile !== null;
-  const isJdReady = jdMode === 'paste' ? jdText.trim().length > 0 : jdFile !== null;
+  const isCvReady = cvMode === 'paste' ? cvText.trim().length > 0 : cvFile !== null && !cvFileParsing;
+  const isJdReady = jdMode === 'paste' ? jdText.trim().length > 0 : jdFile !== null && !jdFileParsing;
 
   return (
     <div style={{ maxWidth: '960px', margin: '0 auto', padding: '2rem', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+
+    <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       
       {/* Header Bar */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', marginBottom: '1.5rem' }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: '2rem' }}>Smart CV & Skill Matcher</h1>
-          <p style={{ margin: '0.5rem 0 0', color: '#666' }}>Analyze how well your CV matches the target Job Description using AI</p>
+          <h1 style={{
+    margin: 0,
+    fontSize: '2.75rem',
+    lineHeight: 1.4,          
+    padding: '0.5rem 0',
+    fontWeight: 800,
+    background: 'linear-gradient(90deg, #7b2ff7 0%, #d6249f 60%, #e5335c 100%)',
+    WebkitBackgroundClip: 'text',
+    WebkitTextFillColor: 'transparent',
+    backgroundClip: 'text',
+    letterSpacing: '-0.02em',
+  }}>Smart CV Matcher</h1>
+          <p style={{ margin: '0.5rem 0 0', color: '#1a1a1a', fontWeight: 700, fontSize: '1.1rem' }}>
+  AI-powered CV matching that boosts your job search.
+</p>
         </div>
-
-        {/* Feature 2: View Sample Result Link/Button */}
-        <button
-          onClick={handleViewSample}
-          style={{
-            padding: '0.6rem 1.2rem',
-            backgroundColor: '#f0f4f8',
-            color: '#0066cc',
-            border: '1px solid #0066cc',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            fontWeight: 600
-          }}
-        >
-          View Sample Result ✨
-        </button>
       </div>
 
       <hr style={{ border: 'none', borderTop: '1px solid #eee', marginBottom: '2rem' }} />
@@ -175,8 +246,9 @@ export default function App() {
             <div style={{ border: '2px dashed #ccc', borderRadius: '6px', padding: '2rem', textAlign: 'center', backgroundColor: '#fff' }}>
               <input type="file" accept=".pdf,.docx,.txt" onChange={handleCvFileUpload} id="cv-upload" style={{ display: 'none' }} />
               <label htmlFor="cv-upload" style={{ cursor: 'pointer', color: '#0066cc', fontWeight: 'bold' }}>
-                {cvFile ? `📄 ${cvFile.name}` : '(Coming Soon)📁 Click to upload CV (.pdf, .docx)'}
+                {cvFileParsing ? `⏳ Reading ${cvFile?.name}...` : cvFile ? `✅ ${cvFile.name}` : '📁 Click to upload CV (.pdf, .docx, .txt)'}
               </label>
+              <div style = {{fontSize: '0.75rem', color: '#999', marginTop: '0.4rem' }}>Max {MAX_FILE_SIZE_MB} MB</div>
             </div>
           )}
         </div>
@@ -228,8 +300,9 @@ export default function App() {
             <div style={{ border: '2px dashed #ccc', borderRadius: '6px', padding: '2rem', textAlign: 'center', backgroundColor: '#fff' }}>
               <input type="file" accept=".pdf,.docx,.txt" onChange={handleJdFileUpload} id="jd-upload" style={{ display: 'none' }} />
               <label htmlFor="jd-upload" style={{ cursor: 'pointer', color: '#0066cc', fontWeight: 'bold' }}>
-                {jdFile ? `📄 ${jdFile.name}` : '(Coming Soon)📁 Click to upload JD (.pdf, .docx)'}
+                {jdFileParsing ? `⏳ Reading ${jdFile?.name}...` : jdFile ? `✅ ${jdFile.name}` : '📁 Click to upload JD (.pdf, .docx, .txt)'}
               </label>
+              <div style = {{fontSize: '0.75rem', color: '#999', marginTop: '0.4rem' }}>Max {MAX_FILE_SIZE_MB} MB</div>
             </div>
           )}
         </div>
@@ -239,7 +312,7 @@ export default function App() {
       <div style={{ textAlign: 'center', marginTop: '1.5rem' }}>
         <button
           onClick={handleAnalyze}
-          disabled={isLoading || (!isCvReady && !result) || (!isJdReady && !result)}
+          disabled={isLoading || !isCvReady || !isJdReady}
           style={{
             padding: '0.85rem 2.5rem',
             fontSize: '1.1rem',
@@ -251,7 +324,26 @@ export default function App() {
             fontWeight: 600
           }}
         >
-          {isLoading ? 'Analyzing Match...' : 'Analyze Matching Score'}
+          {isLoading ? (
+          <>
+            <span
+              style={{
+                display: 'inline-block',
+                width: '16px',
+                height: '16px',
+                border: '2.5px solid rgba(255,255,255,0.4)',
+                borderTopColor: '#fff',
+                borderRadius: '50%',
+                animation: 'spin 0.8s linear infinite',
+                marginRight: '0.6rem',
+                verticalAlign: 'middle',
+              }}
+            />
+            Analyzing...
+          </>
+        ) : (
+          'Analyze Matching Score'
+        )}
         </button>
       </div>
 
@@ -259,26 +351,32 @@ export default function App() {
       {result && (
         <div style={{ marginTop: '2.5rem', padding: '1.5rem', border: '2px solid #0066cc', borderRadius: '8px', backgroundColor: '#f8fbff' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h2 style={{ margin: 0 }}>Matching Results</h2>
+            <h2 style={{ margin: 0 }}>Matching Results
+              {isSample && (
+                <span style = {{marginLeft: '0.6rem', fontSize: '0.75rem', fontWeight: 600, color: '#0066cc', backgroundColor: '#eaf2fc', padding: '0.15rem 0.5rem', borderRadius: '4px', verticalAlign: 'middle'}}>
+                  SAMPLE
+                </span>
+              )}
+            </h2>
             <span style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#0066cc' }}>
               Score: {result.matchPercentage}%
             </span>
           </div>
 
           <p style={{ marginTop: '1rem', fontSize: '1.05rem', color: '#333' }}>
-            <strong>Executive Summary:</strong> {result.candidateSummary}
+            {result.candidateSummary}
           </p>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginTop: '1.5rem' }}>
             <div style={{ backgroundColor: '#fff', padding: '1rem', borderRadius: '6px', border: '1px solid #e0e0e0' }}>
-              <h3 style={{ color: '#2e7d32', marginTop: 0 }}>✅ Key Match Strengths</h3>
+              <h3 style={{ color: '#2e7d32', marginTop: 0 }}>Key Match Strengths</h3>
               <ul>
                 {result.strengths.map((s, i) => <li key={i} style={{ marginBottom: '0.4rem' }}>{s}</li>)}
               </ul>
             </div>
 
             <div style={{ backgroundColor: '#fff', padding: '1rem', borderRadius: '6px', border: '1px solid #e0e0e0' }}>
-              <h3 style={{ color: '#c62828', marginTop: 0 }}>⚠️ Missing / Gap Skills</h3>
+              <h3 style={{ color: '#c62828', marginTop: 0 }}>Missing Skills</h3>
               <ul>
                 {result.missingSkills.map((m, i) => <li key={i} style={{ marginBottom: '0.4rem' }}>{m}</li>)}
               </ul>
@@ -286,16 +384,17 @@ export default function App() {
           </div>
 
           <div style={{ marginTop: '1.5rem', padding: '1.25rem', backgroundColor: '#ffffff', borderLeft: '4px solid #0066cc', borderRadius: '4px' }}>
-            <strong style={{ color: '#0066cc' }}>💡 Recommended Elevator Pitch:</strong>
+            <strong style={{ color: '#0066cc' }}>Recommended Optimization:</strong>
             <p style={{ margin: '0.5rem 0 0', fontStyle: 'italic' }}>"{result.tailoredElevatorPitch}"</p>
           </div>
         </div>
       )}
+      
 
       {/* Feature 3: 3-Step User Guideline Section */}
       <hr style={{ border: 'none', borderTop: '1px solid #eee', margin: '3.5rem 0 2rem' }} />
 
-      <div>
+      <div style = {{backgroundColor: '#dceafb', borderRadius: '10px', padding: '1.75rem 1.5rem'}}>
         <h3 style={{ textAlign: 'center', marginBottom: '1.5rem', color: '#333' }}>How It Works</h3>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1.5rem' }}>
           
@@ -303,9 +402,9 @@ export default function App() {
             <div style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: '#0066cc', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem', fontWeight: 'bold', fontSize: '1.2rem' }}>
               1
             </div>
-            <h4 style={{ margin: '0 0 0.5rem' }}>Paste Text</h4>
+            <h4 style={{ margin: '0 0 0.5rem' }}>Add Your Files</h4>
             <p style={{ margin: 0, fontSize: '0.9rem', color: '#666' }}>
-              Provide your candidate CV and the target Job Description by pasting text or uploading files.
+              Provide your CV and target Job Description by pasting text or uploading files.
             </p>
           </div>
 
@@ -313,9 +412,9 @@ export default function App() {
             <div style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: '#0066cc', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem', fontWeight: 'bold', fontSize: '1.2rem' }}>
               2
             </div>
-            <h4 style={{ margin: '0 0 0.5rem' }}>Check Matching Results</h4>
+            <h4 style={{ margin: '0 0 0.5rem' }}>One Click</h4>
             <p style={{ margin: 0, fontSize: '0.9rem', color: '#666' }}>
-              Review your overall match score, key strengths, missing skills, and a tailored pitch.
+             Click the "Analyze Matching Score" button, analysis usually takes under 30 seconds.
             </p>
           </div>
 
@@ -323,15 +422,14 @@ export default function App() {
             <div style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: '#0066cc', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem', fontWeight: 'bold', fontSize: '1.2rem' }}>
               3
             </div>
-            <h4 style={{ margin: '0 0 0.5rem' }}>Apply CV Optimization</h4>
+            <h4 style={{ margin: '0 0 0.5rem' }}>Check Matching Results</h4>
             <p style={{ margin: 0, fontSize: '0.9rem', color: '#666' }}>
-              Optimize your CV points specifically tailored to highlight missing requirements.
+              Check your overall match score, key strengths, and missing skills.
             </p>
           </div>
 
         </div>
       </div>
-
-    </div>
+      </div> 
   );
 } 
