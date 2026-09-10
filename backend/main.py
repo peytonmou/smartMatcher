@@ -39,21 +39,39 @@ async def match_skills(req: MatchRequest):
     
     if not req.cv_text.strip() or not req.jd_text.strip():
         raise HTTPException(status_code=400, detail="Both CV and JD text must be provided.")
-
+    
     system_prompt = """
     You are an expert AI recruiter and skill matching engine.
     Analyze the provided Candidate CV against the Target Job Description (JD).
-    
-    You MUST return ONLY a valid JSON object matching this schema:
+
+    CRITICAL RULE FOR SCORING:
+    Calculate scores for three distinct dimensions (0-100):
+    1. hardSkillsScore (50% weight): Technical tools, programming languages, databases (e.g., C#, .NET, SQL, Go).
+    2. experienceScore (30% weight): Seniority, project scale, years of experience.
+    3. transferableSkillsScore (20% weight): SOFT SKILLS, DOMAIN KNOWLEDGE, and INTERPERSONAL CAPABILITIES (e.g., communication, coordination, domain knowledge, team leadership). 
+    --> IF THE CV MATCHES SOFT SKILLS OR DOMAIN KNOWLEDGE LISTED IN THE JD (e.g., "communication", "coordination", "industry domain knowledge"), YOU MUST SET transferableSkillsScore HIGH (e.g., 80-100). NEVER RETURN 0 WHEN SOFT SKILLS MATCH.
+
+    --- DOMAIN TAXONOMY & SEMANTIC RULES ---
+    - Tech Stack Ecosystems: Recognize frameworks imply languages (.NET implies C#).
+    - Equivalent Tools: Recognize transferable technical skills (Oracle vs Relational SQL).
+    - Business & Soft Skills: Map synonyms and directly match listed soft skills/domain knowledge.
+
+    --- OUTPUT FORMAT ---
+    You MUST return ONLY a valid JSON object strictly matching this schema:
     {
-      "matchPercentage": integer between 0 and 100,
-      "candidateSummary": "2-3 sentence overview of candidate fit",
-      "strengths": ["list", "of", "4-6", "matching", "skills"],
-      "missingSkills": ["list", "of", "2-5", "missing", "skills"],
-      "tailoredElevatorPitch": "2-sentence elevator pitch"
+    "matchPercentage": integer (0-100),
+    "dimensionScores": {
+        "hardSkillsScore": integer (0-100),
+        "experienceScore": integer (0-100),
+        "transferableSkillsScore": integer (0-100)
+    },
+    "candidateSummary": "string",
+    "strengths": ["string"],
+    "missingSkills": ["string"],
+    "semanticInferences": ["string"],
+    "tailoredElevatorPitch": "string"
     }
     """
-
     try:
         response = client.chat.completions.create(
             model="gpt-5-mini",

@@ -2,21 +2,38 @@ import { useState } from 'react';
 import type { ChangeEvent } from 'react';
 
 // 1. Interface for our AI Response
+interface DimensionScores {
+  hardSkillsScore: number;
+  experienceScore: number;
+  transferableSkillsScore: number;
+}
+
 interface AnalysisResult {
   matchPercentage: number;
+  dimensionScores?: DimensionScores;  // add the multi-dimension scores
   candidateSummary: string;
   strengths: string[];
   missingSkills: string[];
+  semanticInferences?: string[];    // add semantic inference array
   tailoredElevatorPitch: string;
 }
 
 // Sample Mock Data for the "View Sample Result" feature
 const SAMPLE_RESULT: AnalysisResult = {
   matchPercentage: 88,
-  candidateSummary: "Candidate shows strong expertise in project leadership, cross-functional team management, and strategic execution. Minor skill alignment gaps identified in cloud architecture.",
-  strengths: ["Agile & Scrum Methodologies", "Stakeholder Communication", "Budget & Resource Planning", "Data-Driven Decision Making"],
-  missingSkills: ["AWS/Azure Cloud Architecture", "Advanced SQL Analytics"],
-  tailoredElevatorPitch: "Results-oriented leader with 5+ years of driving complex cross-functional projects to completion. Proven track record in optimizing operational workflows and delivering high-impact team outcomes."
+  dimensionScores: {
+    hardSkillsScore: 90,
+    experienceScore: 85,
+    transferableSkillsScore: 85
+  },
+  candidateSummary: "Candidate shows strong technical overlap, especially in .NET ecosystem which strongly aligns with the C# backend requirement. High overall fit for senior roles.",
+  strengths: ["C# & .NET Core Ecosystem", "Agile & Scrum Methodologies", "Stakeholder Communication", "Relational Databases (Oracle/SQL)"],
+  missingSkills: ["AWS Cloud Native Architecture", "GraphQL APIs"],
+  semanticInferences: [
+    "Inferred proficiency in C# based on 4+ years of .NET Core development.",
+    "Mapped Oracle database experience to meet general Relational SQL requirements."
+  ],
+  tailoredElevatorPitch: "Results-oriented C#/.NET Developer with 5+ years of building scalable enterprise systems. Proven ability to bridge legacy databases like Oracle with modern backend APIs."
 };
 
 const MAX_FILE_SIZE_MB= 5;
@@ -131,7 +148,7 @@ export default function App() {
   setIsLoading(true);
   setResult(null);
 
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+  const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
   try {
     const response = await fetch(`${API_URL}/api/match`, {
       method: 'POST',
@@ -359,13 +376,46 @@ export default function App() {
               )}
             </h2>
             <span style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#0066cc' }}>
-              Score: {result.matchPercentage}%
+              Overall Score: {result.matchPercentage}%
             </span>
           </div>
 
-          <p style={{ marginTop: '1rem', fontSize: '1.05rem', color: '#333' }}>
+          {/* Multi-Dimension Scores */}
+          {result.dimensionScores && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', marginTop: '1.25rem' }}>
+              <div style={{ backgroundColor: '#fff', padding: '0.75rem', borderRadius: '6px', textAlign: 'center', border: '1px solid #e0e0e0'}}>
+                <div style={{ fontSize: '0.85rem', color:'#666'}}>Hard Skills (50%)</div>
+                <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#2e7d32'}}>{result.dimensionScores.hardSkillsScore ?? 0}%</div>
+              </div>
+            
+            <div style={{backgroundColor: '#fff', padding: '0.75rem', borderRadius: '6px', textAlign: 'center', border: '1px solid #e0e0e0'}}>
+              <div style={{fontSize: '0.85rem', color:'#666'}}>Experience Fit (30%)</div>
+              <div style={{fontSize: '1.25rem', fontWeight: 'bold', color: '#0066cc'}}>{result.dimensionScores.experienceScore ?? 0}%</div>
+              </div>
+            
+            <div style={{backgroundColor: '#fff', padding: '0.75rem', borderRadius: '6px', textAlign: 'center', border: '1px solid #e0e0e0'}}>
+              <div style={{fontSize: '0.85rem', color:'#666'}}>Soft Skills (20%)</div>
+              <div style={{fontSize: '1.25rem', fontWeight: 'bold', color: '#7b2ff7' }}>{result.dimensionScores.transferableSkillsScore ?? 0}%</div>
+              </div>
+            </div>
+          )}
+
+          <p style={{ marginTop: '1rem', fontSize: '1.05rem', color: '#333', lineHeight:1.5 }}>
             {result.candidateSummary}
           </p>
+
+          {/*AI Semantic Inference Content */}
+          {result.semanticInferences && result.semanticInferences.length > 0 && (
+            <div style={{marginTop: '1rem', padding: '0.85rem 1rem', backgroundColor: '#f0f4f9', borderRadius: '6px', borderLeft: '4px solid #7b2ff7' }}>
+              <strong style={{color: '#7b2ff7', fontSize: '0.9rem'}}>AI Semantic Inferences:</strong>
+              <ul style={{margin: '0.5rem 0 0', paddingLeft: '1.2rem', fontSize: '0.9rem', color: '#444'}}>
+                {result.semanticInferences.map((inf, i) => (
+                  <li key={i}>{inf}
+                  </li>
+                ))}
+              </ul>
+              </div>
+          )}
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginTop: '1.5rem' }}>
             <div style={{ backgroundColor: '#fff', padding: '1rem', borderRadius: '6px', border: '1px solid #e0e0e0' }}>
