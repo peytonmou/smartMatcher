@@ -77,3 +77,49 @@ React Results Dashboard
 ```
 
 ---
+
+## Passwordless sign-in
+
+The app uses a six-digit email verification code. In production, Resend sends
+the email and Neon hosts the PostgreSQL database. For local development, use
+the explicit `EMAIL_DELIVERY_MODE=console` setting in
+`backend/.env.example` to print codes in the FastAPI terminal.
+
+Start the backend from the `backend` directory:
+
+```bash
+python -m uvicorn main:app --reload
+```
+
+The local backend creates a SQLite database named `backend/smart_cv_matcher.db`
+on startup. It stores users (`user_id`, `email_address`,
+`first_login_time`, and `last_login_time`) and temporary, hashed verification
+codes. The database file and environment files are deliberately ignored by Git.
+
+For the online deployment, copy the values from `backend/.env.example` into
+your backend host's environment-variable dashboard. Set at least:
+
+```text
+APP_ENV=production
+EMAIL_DELIVERY_MODE=resend
+DATABASE_URL=<Neon PostgreSQL connection string>
+RESEND_API_KEY=<Resend API key>
+RESEND_FROM_EMAIL=Smart CV Matcher <login@your-verified-domain.com>
+AUTH_SESSION_SECRET=<long, unique random secret>
+FRONTEND_ORIGINS=https://your-frontend.example
+COOKIE_SECURE=true
+COOKIE_SAMESITE=none
+```
+
+The provided Neon URL may start with `postgresql://`; the backend converts it
+to SQLAlchemy's `postgresql+psycopg://` format automatically. Keep Neon SSL
+parameters in the copied URL. Before sending production email, verify the
+sender domain in Resend; Resend requires a verified domain for sender
+addresses.
+
+Database changes are tracked with Alembic. From the project root, apply the
+versioned schema with:
+
+```bash
+python -m alembic -c backend/alembic.ini upgrade head
+```

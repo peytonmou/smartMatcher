@@ -28,5 +28,7 @@ __pycache__/
 
 # Env variables
 .env
+.env.example
 *.env
 backend/.env
+backend/*.db

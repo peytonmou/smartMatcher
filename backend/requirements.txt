@@ -3,3 +3,8 @@ uvicorn
 python-dotenv
 openai
 pydantic
+SQLAlchemy
+alembic
+itsdangerous
+resend
+psycopg[binary]

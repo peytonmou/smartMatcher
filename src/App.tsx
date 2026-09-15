@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import type { ChangeEvent } from 'react';
+import { useEffect, useState } from 'react';
+import type { ChangeEvent, FormEvent } from 'react';
 
 // 1. Interface for our AI Response
 interface DimensionScores {
@@ -16,6 +16,22 @@ interface AnalysisResult {
   missingSkills: string[];
   semanticInferences?: string[];    // add semantic inference array
   tailoredElevatorPitch: string;
+}
+
+interface AuthenticatedUser {
+  user_id: number;
+  email_address: string;
+  first_login_time: string;
+  last_login_time: string;
+}
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+
+const AVATAR_COLORS = ['#0066cc', '#7b2ff7', '#d6249f', '#00897b', '#e65100', '#546e7a'];
+
+function avatarColor(emailAddress: string): string {
+  const hash = [...emailAddress].reduce((total, character) => total + character.charCodeAt(0), 0);
+  return AVATAR_COLORS[hash % AVATAR_COLORS.length];
 }
 
 // Sample Mock Data for the "View Sample Result" feature
@@ -89,6 +105,88 @@ export default function App() {
   const [result, setResult] = useState<AnalysisResult | null>(SAMPLE_RESULT);
   const [isSample, setIsSample] = useState(true);
 
+  // Authentication state. Feature restrictions will be added later.
+  const [user, setUser] = useState<AuthenticatedUser | null>(null);
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [authStep, setAuthStep] = useState<'email' | 'code'>('email');
+  const [emailAddress, setEmailAddress] = useState('');
+  const [verificationCode, setVerificationCode] = useState('');
+  const [authMessage, setAuthMessage] = useState('');
+  const [authError, setAuthError] = useState('');
+  const [isAuthLoading, setIsAuthLoading] = useState(false);
+
+  useEffect(() => {
+    const loadCurrentUser = async () => {
+      try {
+        const response = await fetch(`${API_URL}/api/auth/me`, { credentials: 'include' });
+        if (response.ok) setUser(await response.json());
+      } catch {
+        // The API may not be running while a frontend developer is working.
+      }
+    };
+    void loadCurrentUser();
+  }, []);
+
+  const openSignIn = () => {
+    setAuthStep('email');
+    setVerificationCode('');
+    setAuthError('');
+    setAuthMessage('');
+    setIsAuthOpen(true);
+  };
+
+  const requestCode = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setIsAuthLoading(true);
+    setAuthError('');
+    try {
+      const response = await fetch(`${API_URL}/api/auth/request-code`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ email_address: emailAddress }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || 'Unable to create a verification code.');
+      setAuthMessage(data.message);
+      setAuthStep('code');
+    } catch (error: unknown) {
+      setAuthError(error instanceof Error ? error.message : 'Unable to request a verification code.');
+    } finally {
+      setIsAuthLoading(false);
+    }
+  };
+
+  const verifyLoginCode = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setIsAuthLoading(true);
+    setAuthError('');
+    try {
+      const response = await fetch(`${API_URL}/api/auth/verify-code`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ email_address: emailAddress, code: verificationCode }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || 'Unable to verify the code.');
+      setUser(data);
+      setIsAuthOpen(false);
+    } catch (error: unknown) {
+      setAuthError(error instanceof Error ? error.message : 'Unable to verify the code.');
+    } finally {
+      setIsAuthLoading(false);
+    }
+  };
+
+  const logout = async () => {
+    try {
+      await fetch(`${API_URL}/api/auth/logout`, { method: 'POST', credentials: 'include' });
+    } finally {
+      setUser(null);
+    }
+  };
+
   // File upload handlers
   const handleCvFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
   const file = e.target.files?.[0];
@@ -148,13 +246,13 @@ export default function App() {
   setIsLoading(true);
   setResult(null);
 
-  const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
   try {
     const response = await fetch(`${API_URL}/api/match`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
+      credentials: 'include',
       body: JSON.stringify({
         cv_text: cvText,
         jd_text: jdText,
@@ -192,6 +290,22 @@ export default function App() {
       
       {/* Header Bar */}
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', marginBottom: '1.5rem' }}>
+        <div style={{ width: '100%', display: 'flex', justifyContent: 'flex-end', minHeight: '2rem' }}>
+          {user ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '0.9rem' }}>
+              <span
+                title={user.email_address}
+                aria-label={`Signed in as ${user.email_address}`}
+                style={{ width: '2rem', height: '2rem', borderRadius: '50%', backgroundColor: avatarColor(user.email_address), color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.9rem' }}
+              >
+                {user.email_address.charAt(0).toUpperCase()}
+              </span>
+              <button onClick={logout} style={{ padding: '0.35rem 0.65rem', border: '1px solid #0066cc', borderRadius: '4px', background: '#fff', color: '#0066cc', cursor: 'pointer' }}>Sign out</button>
+            </div>
+          ) : (
+            <button onClick={openSignIn} style={{ padding: '0.4rem 0.8rem', border: 'none', borderRadius: '4px', background: '#0066cc', color: '#fff', cursor: 'pointer', fontWeight: 600 }}>Sign in</button>
+          )}
+        </div>
         <div>
           <h1 style={{
     margin: 0,
@@ -480,6 +594,42 @@ export default function App() {
 
         </div>
       </div>
+
+      {isAuthOpen && (
+        <div role="dialog" aria-modal="true" aria-labelledby="sign-in-title" style={{ position: 'fixed', inset: 0, zIndex: 10, background: 'rgba(0, 0, 0, 0.45)', display: 'grid', placeItems: 'center', padding: '1rem' }}>
+          <div style={{ width: '100%', maxWidth: '420px', background: '#fff', color: '#222', borderRadius: '10px', padding: '1.5rem', textAlign: 'left', boxShadow: '0 12px 32px rgba(0,0,0,0.25)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: '1rem' }}>
+              <div>
+                <h2 id="sign-in-title" style={{ margin: 0, fontSize: '1.4rem' }}>Sign in</h2>
+                <p style={{ marginTop: '0.45rem', color: '#555', fontSize: '0.9rem' }}>Use your email address—no password needed.</p>
+              </div>
+              <button onClick={() => setIsAuthOpen(false)} aria-label="Close sign-in" style={{ border: 'none', background: 'transparent', cursor: 'pointer', fontSize: '1.3rem', color: '#555' }}>×</button>
+            </div>
+
+            {authStep === 'email' ? (
+              <form onSubmit={requestCode}>
+                <label htmlFor="login-email" style={{ display: 'block', marginTop: '1rem', marginBottom: '0.35rem', fontWeight: 600 }}>Email address</label>
+                <input id="login-email" type="email" required autoComplete="email" value={emailAddress} onChange={(event) => setEmailAddress(event.target.value)} placeholder="you@example.com" style={{ width: '100%', boxSizing: 'border-box', padding: '0.65rem', border: '1px solid #bbb', borderRadius: '4px' }} />
+                {authError && <p role="alert" style={{ color: '#c62828', fontSize: '0.9rem' }}>{authError}</p>}
+                <button type="submit" disabled={isAuthLoading} style={{ width: '100%', marginTop: '1rem', padding: '0.7rem', border: 'none', borderRadius: '4px', background: '#0066cc', color: '#fff', cursor: 'pointer', fontWeight: 600 }}>
+                  {isAuthLoading ? 'Creating code...' : 'Continue'}
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={verifyLoginCode}>
+                <p style={{ marginTop: '1rem', color: '#555', fontSize: '0.9rem' }}>{authMessage}</p>
+                <label htmlFor="verification-code" style={{ display: 'block', marginBottom: '0.35rem', fontWeight: 600 }}>Six-digit verification code</label>
+                <input id="verification-code" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} required autoComplete="one-time-code" value={verificationCode} onChange={(event) => setVerificationCode(event.target.value.replace(/\D/g, ''))} placeholder="123456" style={{ width: '100%', boxSizing: 'border-box', padding: '0.65rem', border: '1px solid #bbb', borderRadius: '4px', letterSpacing: '0.2em' }} />
+                {authError && <p role="alert" style={{ color: '#c62828', fontSize: '0.9rem' }}>{authError}</p>}
+                <button type="submit" disabled={isAuthLoading} style={{ width: '100%', marginTop: '1rem', padding: '0.7rem', border: 'none', borderRadius: '4px', background: '#0066cc', color: '#fff', cursor: 'pointer', fontWeight: 600 }}>
+                  {isAuthLoading ? 'Signing in...' : 'Verify and sign in'}
+                </button>
+                <button type="button" onClick={() => { setAuthStep('email'); setAuthError(''); }} style={{ width: '100%', marginTop: '0.6rem', padding: '0.6rem', border: 'none', background: 'transparent', color: '#0066cc', cursor: 'pointer' }}>Use a different email</button>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
       </div> 
   );
-} 
+}
